@@ -4,18 +4,14 @@ import javafx.scene.input.MouseEvent;
 import kg.nurtelecom.chess.models.Board;
 import kg.nurtelecom.chess.models.PieceColor;
 import kg.nurtelecom.chess.records.Piece;
+import kg.nurtelecom.chess.rules.CheckDetector;
 import kg.nurtelecom.chess.rules.MoveValidator;
 import kg.nurtelecom.chess.ui.BoardView;
 import kg.nurtelecom.chess.ui.InfoPanel;
 
 /**
- * Соединяет модель (Board), отрисовку (BoardView), правила (MoveValidator)
- * и мышь пользователя. Здесь же хранится, чей сейчас ход.
- * <p>
- * Взаимодействие: нажал на свою фигуру (запоминаем клетку), отпустил —
- * если ход по правилам возможен, фигура переставляется и доска
- * перерисовывается целиком. Визуального "полёта" фигуры за курсором нет
- * (картинки без прозрачности, это выглядело бы криво — фон клетки ехал бы вместе с фигурой).
+ * Соединяет модель (Board), отрисовку (BoardView), правила (MoveValidator,
+ * CheckDetector) и мышь пользователя. Хранит, чей сейчас ход, и завершена ли партия.
  */
 public class GameController {
 
@@ -24,6 +20,7 @@ public class GameController {
     private final InfoPanel infoPanel;
 
     private PieceColor sideToMove = PieceColor.WHITE;
+    private boolean gameOver = false;
 
     private boolean dragging = false;
     private int dragFromRow = -1;
@@ -42,6 +39,10 @@ public class GameController {
     }
 
     private void handleMousePressed(MouseEvent event) {
+        if (gameOver) {
+            return;
+        }
+
         int[] square = boardView.pointToSquare(event.getX(), event.getY());
         if (square == null) {
             return;
@@ -91,6 +92,7 @@ public class GameController {
     public void startNewGame(PieceColor humanColor) {
         board.setupStandardPosition();
         sideToMove = PieceColor.WHITE;
+        gameOver = false;
         boardView.setFlipped(humanColor == PieceColor.BLACK);
         boardView.draw(board);
 
@@ -99,7 +101,21 @@ public class GameController {
     }
 
     private void updateStatus() {
-        String turn = sideToMove == PieceColor.WHITE ? "белых" : "чёрных";
-        infoPanel.setStatus("Ход " + turn + ".");
+        CheckDetector.Status status = CheckDetector.evaluate(board, sideToMove);
+        String turnLabel = sideToMove == PieceColor.WHITE ? "белых" : "чёрных";
+
+        switch (status) {
+            case NORMAL -> infoPanel.setStatus("Ход " + turnLabel + ".");
+            case CHECK -> infoPanel.setStatus("Шах!\nХод " + turnLabel + ".");
+            case CHECKMATE -> {
+                gameOver = true;
+                String winner = sideToMove == PieceColor.WHITE ? "Чёрные" : "Белые";
+                infoPanel.setStatus("Мат!\n" + winner + " побеждают.");
+            }
+            case STALEMATE -> {
+                gameOver = true;
+                infoPanel.setStatus("Пат.\nНичья.");
+            }
+        }
     }
 }

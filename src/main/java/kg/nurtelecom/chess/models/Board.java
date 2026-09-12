@@ -1,6 +1,5 @@
 package kg.nurtelecom.chess.models;
 
-
 import kg.nurtelecom.chess.enums.PieceType;
 import kg.nurtelecom.chess.records.Piece;
 
@@ -21,6 +20,22 @@ public class Board {
 
     public Board() {
         setupStandardPosition();
+    }
+
+    /** Приватный конструктор для copy() — клонирует клетки вместо стандартной расстановки. */
+    private Board(Piece[][] source) {
+        for (int row = 0; row < SIZE; row++) {
+            squares[row] = source[row].clone();
+        }
+    }
+
+    /**
+     * Независимая копия доски — можно "мысленно" сделать ход на копии
+     * и проверить его последствия (например, не под шахом ли король),
+     * не трогая настоящую партию.
+     */
+    public Board copy() {
+        return new Board(squares);
     }
 
     public void setupStandardPosition() {
@@ -57,4 +72,3 @@ public class Board {
         }
     }
 }
-

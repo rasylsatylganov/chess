@@ -1,17 +1,20 @@
 package kg.nurtelecom.chess.rules;
 
-
 import kg.nurtelecom.chess.models.Board;
 import kg.nurtelecom.chess.models.PieceColor;
 import kg.nurtelecom.chess.records.Piece;
 
 /**
- * Проверка "может ли фигура так пойти" — по правилам конкретной фигуры,
- * с учётом других фигур на пути (кроме коня — он прыгает).
+ * Проверка "может ли фигура так пойти".
  * <p>
- * ЧЕГО ЗДЕСЬ ПОКА НЕТ (сознательно, это следующие шаги):
- * - не проверяется, не остаётся ли после хода свой король под шахом;
- * - нет взятия на проходе, рокировки, превращения пешки.
+ * Два уровня:
+ * - {@link #isPseudoLegalMove} — только правила конкретной фигуры (куда она
+ *   в принципе ходит, не прыгает ли через другие фигуры). Не знает про шах.
+ * - {@link #isLegalMove} — то же самое, плюс проверка через {@link CheckDetector}:
+ *   не окажется ли после этого хода свой король под боем. Именно этот метод
+ *   должен использовать интерфейс (GameController).
+ * <p>
+ * ЧЕГО ЗДЕСЬ ПОКА НЕТ: взятия на проходе, рокировки, превращения пешки.
  */
 public final class MoveValidator {
 
@@ -19,6 +22,21 @@ public final class MoveValidator {
     }
 
     public static boolean isLegalMove(Board board, int fromRow, int fromCol, int toRow, int toCol) {
+        if (!isPseudoLegalMove(board, fromRow, fromCol, toRow, toCol)) {
+            return false;
+        }
+
+        Piece piece = board.get(fromRow, fromCol);
+
+        // "Мысленно" делаем ход на копии доски и смотрим, не остался ли свой король под боем.
+        Board afterMove = board.copy();
+        afterMove.set(toRow, toCol, piece);
+        afterMove.set(fromRow, fromCol, null);
+
+        return !CheckDetector.isInCheck(afterMove, piece.color());
+    }
+
+    public static boolean isPseudoLegalMove(Board board, int fromRow, int fromCol, int toRow, int toCol) {
         if (fromRow == toRow && fromCol == toCol) {
             return false;
         }
@@ -120,4 +138,3 @@ public final class MoveValidator {
         return true;
     }
 }
-
