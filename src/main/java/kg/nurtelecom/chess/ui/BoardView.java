@@ -1,6 +1,5 @@
 package kg.nurtelecom.chess.ui;
 
-
 import javafx.geometry.VPos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -17,12 +16,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Рисует доску картинками из src/main/resources/png, плюс подписи координат
- * по краям (цифры слева, буквы снизу — как на настоящей доске).
+ * Рисует доску картинками из src/main/resources/png и подписи координат.
  * <p>
- * Поддерживает "переворот" ({@link #setFlipped}) — когда игрок играет чёрными,
- * доска показывается снизу-вверх (чёрные внизу, ближе к игроку), но модель
- * доски (Board) при этом не меняется — переворот чисто визуальный.
+ * Визуального "перетаскивания" фигуры за курсором сознательно нет: картинки
+ * фигур содержат вшитый фон клетки (без прозрачности), поэтому при таком
+ * перетаскивании вместе с фигурой "ехал" бы ещё и чужой фон. Вместо этого
+ * фигура переставляется одним действием сразу в момент отпускания кнопки
+ * мыши (см. GameController) — доска просто перерисовывается целиком.
  */
 public class BoardView extends Canvas {
 
@@ -33,7 +33,6 @@ public class BoardView extends Canvas {
 
     private final Map<String, Image> imageCache = new HashMap<>();
 
-    /** true, если доска показывается "с точки зрения чёрных" (чёрные внизу). */
     private boolean flipped = false;
 
     public BoardView() {
@@ -57,9 +56,31 @@ public class BoardView extends Canvas {
         drawCoordinateLabels(gc, margin, boardPixelSize, squareSize);
     }
 
+    /**
+     * Переводит пиксельные координаты клика в клетку доски (row, col) в системе координат Board.
+     * Возвращает null, если клик пришёлся на полосу с подписями или мимо доски.
+     */
+    public int[] pointToSquare(double x, double y) {
+        double size = getWidth();
+        double margin = size * MARGIN_RATIO;
+        double boardPixelSize = size - margin;
+        double squareSize = boardPixelSize / Board.SIZE;
+
+        if (x < margin || x >= size || y < 0 || y >= boardPixelSize) {
+            return null;
+        }
+
+        int screenCol = (int) ((x - margin) / squareSize);
+        int screenRow = (int) (y / squareSize);
+        screenCol = Math.max(0, Math.min(Board.SIZE - 1, screenCol));
+        screenRow = Math.max(0, Math.min(Board.SIZE - 1, screenRow));
+
+        int row = flipped ? Board.SIZE - 1 - screenRow : screenRow;
+        int col = flipped ? Board.SIZE - 1 - screenCol : screenCol;
+        return new int[]{row, col};
+    }
+
     private void drawSquaresAndPieces(GraphicsContext gc, Board board, double offsetX, double squareSize) {
-        // screenRow/screenCol — позиция на экране (0,0 = левый верхний угол доски).
-        // row/col — логическая клетка в модели Board. При flipped=true они идут в обратном порядке.
         for (int screenRow = 0; screenRow < Board.SIZE; screenRow++) {
             for (int screenCol = 0; screenCol < Board.SIZE; screenCol++) {
                 int row = flipped ? Board.SIZE - 1 - screenRow : screenRow;
@@ -128,5 +149,29 @@ public class BoardView extends Canvas {
     @Override
     public boolean isResizable() {
         return true;
+    }
+
+    // Без этого JavaFX считает ТЕКУЩИЙ размер канваса его минимальным размером —
+    // а раз мы сами постоянно увеличиваем канвас через привязку, минимальный
+    // размер окна незаметно растёт следом, и окно потом физически не сжимается
+    // обратно. Явно говорим: минимум — 0, максимум — не ограничен.
+    @Override
+    public double minWidth(double height) {
+        return 0;
+    }
+
+    @Override
+    public double minHeight(double width) {
+        return 0;
+    }
+
+    @Override
+    public double maxWidth(double height) {
+        return Double.MAX_VALUE;
+    }
+
+    @Override
+    public double maxHeight(double width) {
+        return Double.MAX_VALUE;
     }
 }

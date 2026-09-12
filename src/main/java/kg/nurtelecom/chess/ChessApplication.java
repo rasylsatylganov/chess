@@ -14,7 +14,9 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
+import kg.nurtelecom.chess.game.GameController;
 import kg.nurtelecom.chess.models.Board;
+import kg.nurtelecom.chess.models.PieceColor;
 import kg.nurtelecom.chess.ui.BoardView;
 import kg.nurtelecom.chess.ui.InfoPanel;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -47,9 +49,8 @@ public class ChessApplication extends Application {
 		Board board = new Board();
 		BoardView boardView = new BoardView();
 		InfoPanel infoPanel = new InfoPanel();
+		GameController gameController = new GameController(board, boardView, infoPanel);
 
-		// Доска живёт в отдельном контейнере — так привязка размера считается
-		// от места, оставшегося ПОД меню и СПРАВА от панели, а не от всего окна целиком.
 		StackPane boardContainer = new StackPane(boardView);
 		boardContainer.setStyle("-fx-background-color: #2b2b2b;");
 
@@ -59,7 +60,7 @@ public class ChessApplication extends Application {
 		boardSize.addListener((obs, oldVal, newVal) -> boardView.draw(board));
 
 		BorderPane root = new BorderPane();
-		root.setTop(buildMenuBar(board, boardView, infoPanel));
+		root.setTop(buildMenuBar(gameController));
 		root.setCenter(boardContainer);
 		root.setRight(infoPanel);
 
@@ -73,12 +74,9 @@ public class ChessApplication extends Application {
 		boardView.draw(board); // первая отрисовка, когда размеры уже посчитаны
 	}
 
-	/**
-	 * Меню: Игра -> Одиночная -> С компьютером (Web).
-	 */
-	private MenuBar buildMenuBar(Board board, BoardView boardView, InfoPanel infoPanel) {
+	private MenuBar buildMenuBar(GameController gameController) {
 		MenuItem vsComputerWeb = new MenuItem("С компьютером (Web)");
-		vsComputerWeb.setOnAction(event -> startNewGame(board, boardView, infoPanel));
+		vsComputerWeb.setOnAction(event -> promptColorAndStart(gameController));
 
 		Menu singlePlayerMenu = new Menu("Одиночная");
 		singlePlayerMenu.getItems().add(vsComputerWeb);
@@ -91,13 +89,7 @@ public class ChessApplication extends Application {
 		return menuBar;
 	}
 
-	/**
-	 * Запрашивает у игрока цвет фигур и настраивает доску соответственно.
-	 * Сама расстановка фигур в модели не меняется — переворачивается только
-	 * визуальное отображение (BoardView.setFlipped), чтобы выбранный цвет
-	 * игрока оказался снизу, ближе к нему, как за настоящей доской.
-	 */
-	private void startNewGame(Board board, BoardView boardView, InfoPanel infoPanel) {
+	private void promptColorAndStart(GameController gameController) {
 		ButtonType whiteButton = new ButtonType("Белыми");
 		ButtonType blackButton = new ButtonType("Чёрными");
 
@@ -108,18 +100,11 @@ public class ChessApplication extends Application {
 
 		Optional<ButtonType> choice = dialog.showAndWait();
 		if (choice.isEmpty()) {
-			return; // закрыли диалог, ничего не выбрав
+			return;
 		}
 
-		boolean playingBlack = choice.get() == blackButton;
-
-		board.setupStandardPosition(); // свежая партия
-		boardView.setFlipped(playingBlack);
-		boardView.draw(board);
-
-		infoPanel.setStatus(playingBlack
-				? "Вы играете чёрными.\nХод белых."
-				: "Вы играете белыми.\nВаш ход.");
+		PieceColor humanColor = choice.get() == blackButton ? PieceColor.BLACK : PieceColor.WHITE;
+		gameController.startNewGame(humanColor);
 	}
 
 	@Override
