@@ -95,6 +95,7 @@ public class GameController {
 
         String moveText = MoveNotation.format(piece, fromRow, fromCol, toRow, toCol, captured != null, status);
         infoPanel.addMove(movedColor, moveText);
+        infoPanel.setActiveClock(sideToMove);
 
         applyStatus(status);
     }
@@ -107,6 +108,7 @@ public class GameController {
         boardView.setFlipped(humanColor == PieceColor.BLACK);
         boardView.draw(board);
         infoPanel.clearHistory();
+        infoPanel.resetClocks();
 
         String colorLabel = humanColor == PieceColor.WHITE ? "белыми" : "чёрными";
         infoPanel.setStatus("Вы играете " + colorLabel + ".\nХод белых.");
@@ -120,11 +122,13 @@ public class GameController {
             case CHECK -> infoPanel.setStatus("Шах!\nХод " + turnLabel + ".");
             case CHECKMATE -> {
                 gameOver = true;
+                infoPanel.stopClocks();
                 String winner = sideToMove == PieceColor.WHITE ? "Чёрные" : "Белые";
                 infoPanel.setStatus("Мат!\n" + winner + " побеждают.");
             }
             case STALEMATE -> {
                 gameOver = true;
+                infoPanel.stopClocks();
                 infoPanel.setStatus("Пат.\nНичья.");
             }
         }

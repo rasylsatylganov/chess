@@ -1,6 +1,5 @@
 package kg.nurtelecom.chess.ui;
 
-
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
@@ -9,11 +8,12 @@ import javafx.scene.layout.VBox;
 import kg.nurtelecom.chess.models.PieceColor;
 
 /**
- * Правая панель: статус ("Ваш ход" и т.п.) сверху и история ходов снизу.
- * Часы (шаг 7) добавятся сюда же позже.
+ * Правая панель: часы сверху, статус ("Ваш ход" и т.п.) под ними,
+ * история ходов снизу — на всю оставшуюся высоту.
  */
 public class InfoPanel extends VBox {
 
+    private final ClockPanel clockPanel = new ClockPanel();
     private final Label statusLabel = new Label("Игра ещё не начата.\nВыберите: Игра \u2192 Одиночная.");
     private final TextArea historyArea = new TextArea();
 
@@ -40,7 +40,7 @@ public class InfoPanel extends VBox {
                         + "-fx-font-size: 13px;");
         VBox.setVgrow(historyArea, Priority.ALWAYS);
 
-        getChildren().addAll(statusLabel, historyTitle, historyArea);
+        getChildren().addAll(clockPanel, statusLabel, historyTitle, historyArea);
     }
 
     public void setStatus(String text) {
@@ -64,5 +64,20 @@ public class InfoPanel extends VBox {
             historyArea.appendText(moveText + "\n");
             moveNumber++;
         }
+    }
+
+    /** Сбросить оба счётчика времени и запустить их заново (часы белых) — новая партия. */
+    public void resetClocks() {
+        clockPanel.reset();
+    }
+
+    /** Переключить, чьи часы сейчас тикают — вызывать после каждого хода. */
+    public void setActiveClock(PieceColor color) {
+        clockPanel.switchActiveSide(color);
+    }
+
+    /** Остановить часы — партия закончилась (мат/пат). */
+    public void stopClocks() {
+        clockPanel.stop();
     }
 }
