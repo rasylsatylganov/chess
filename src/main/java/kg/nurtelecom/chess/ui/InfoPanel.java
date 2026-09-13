@@ -85,4 +85,9 @@ public class InfoPanel extends VBox {
     public void stopClocks() {
         clockPanel.stop();
     }
+
+    /** Возобновить часы без сброса счётчиков (например, после отмены хода из позиции мата). */
+    public void resumeClocks() {
+        clockPanel.resume();
+    }
 }

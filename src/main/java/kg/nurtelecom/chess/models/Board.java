@@ -1,5 +1,6 @@
 package kg.nurtelecom.chess.models;
 
+
 import kg.nurtelecom.chess.enums.PieceType;
 import kg.nurtelecom.chess.records.Piece;
 
@@ -38,6 +39,13 @@ public class Board {
         return new Board(squares);
     }
 
+    /** Перезаписывает клетки этой доски содержимым другой доски — используется для отмены хода. */
+    public void restoreFrom(Board other) {
+        for (int row = 0; row < SIZE; row++) {
+            System.arraycopy(other.squares[row], 0, this.squares[row], 0, SIZE);
+        }
+    }
+
     public void setupStandardPosition() {
         for (Piece[] row : squares) {
             Arrays.fill(row, null);
@@ -72,3 +80,4 @@ public class Board {
         }
     }
 }
+

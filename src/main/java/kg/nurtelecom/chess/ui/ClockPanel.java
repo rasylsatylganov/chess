@@ -1,6 +1,5 @@
 package kg.nurtelecom.chess.ui;
 
-
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
@@ -79,6 +78,11 @@ public class ClockPanel extends HBox {
     /** Остановить оба счётчика — партия закончилась (мат/пат). */
     public void stop() {
         timeline.stop();
+    }
+
+    /** Возобновить тиканье без сброса счётчиков — например, после отмены хода из позиции мата. */
+    public void resume() {
+        timeline.play();
     }
 
     private void tick() {

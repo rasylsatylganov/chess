@@ -16,22 +16,33 @@ import kg.nurtelecom.chess.rules.MoveValidator;
 import kg.nurtelecom.chess.ui.BoardView;
 import kg.nurtelecom.chess.ui.InfoPanel;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+
 /**
  * Соединяет модель (Board), отрисовку (BoardView), правила (MoveValidator,
- * CheckDetector), нотацию хода, часы, мышь пользователя — и теперь ещё
- * и "думающего" соперника через {@link ChessApiClient}.
- * <p>
- * Игрок двигает только фигуры выбранного им цвета (humanColor). После
- * каждого хода, если очередь оказывается за другим цветом, GameController
- * сам запрашивает ход у chess-api.com и применяет его — асинхронно,
- * чтобы окно не "зависало" в ожидании ответа сервера.
+ * CheckDetector), нотацию хода, часы, мышь пользователя и соперника через
+ * {@link ChessApiClient}. Также хранит историю позиций для отмены хода.
  */
 public class GameController {
+
+    /** Снимок позиции ПЕРЕД тем, как сторона color сделала ход. */
+    private record GameSnapshot(Board board, PieceColor sideToMove) {
+    }
+
+    /** Уже сделанный ход — для перестроения текстовой истории после отмены. */
+    private record AppliedMove(PieceColor color, String notation) {
+    }
 
     private final Board board;
     private final BoardView boardView;
     private final InfoPanel infoPanel;
     private final ChessApiClient chessApiClient = new ChessApiClient();
+
+    private final Deque<GameSnapshot> history = new ArrayDeque<>();
+    private final List<AppliedMove> appliedMoves = new ArrayList<>();
 
     private PieceColor sideToMove = PieceColor.WHITE;
     private PieceColor humanColor = PieceColor.WHITE;
@@ -39,8 +50,8 @@ public class GameController {
     private boolean gameOver = false;
     private boolean waitingForComputer = false;
 
-    // Растёт с каждой новой партией — так пришедший с опозданием ответ от
-    // сервера от УЖЕ ЗАКОНЧЕННОЙ/ПЕРЕЗАПУЩЕННОЙ партии просто игнорируется.
+    // Растёт с каждой новой партией И с каждой отменой хода — так пришедший
+    // с опозданием ответ сервера для уже неактуальной позиции просто игнорируется.
     private int gameGeneration = 0;
 
     private boolean dragging = false;
@@ -72,7 +83,6 @@ public class GameController {
         int col = square[1];
 
         Piece piece = board.get(row, col);
-        // Двигать можно только СВОИ фигуры (humanColor) и только в свой ход.
         if (piece == null || piece.color() != humanColor || sideToMove != humanColor) {
             return;
         }
@@ -102,13 +112,9 @@ public class GameController {
         boardView.draw(board);
     }
 
-    /**
-     * Переставляет фигуру, обновляет часы/историю/статус и, если теперь
-     * очередь соперника — запрашивает его ход у chess-api.com.
-     * promotion — во что превратить пешку (только для ходов от chess-api.com;
-     * свои собственные превращения пешки мы пока не поддерживаем, см. MoveValidator).
-     */
     private void applyMove(int fromRow, int fromCol, int toRow, int toCol, PieceType promotion) {
+        history.push(new GameSnapshot(board.copy(), sideToMove));
+
         Piece piece = board.get(fromRow, fromCol);
         Piece captured = board.get(toRow, toCol);
         Piece placedPiece = promotion != null ? new Piece(promotion, piece.color()) : piece;
@@ -120,10 +126,54 @@ public class GameController {
         CheckDetector.Status status = CheckDetector.evaluate(board, sideToMove);
 
         String moveText = MoveNotation.format(placedPiece, fromRow, fromCol, toRow, toCol, captured != null, status);
+        appliedMoves.add(new AppliedMove(piece.color(), moveText));
         infoPanel.addMove(piece.color(), moveText);
         infoPanel.setActiveClock(sideToMove);
 
         applyStatus(status);
+
+        if (!gameOver && sideToMove != humanColor) {
+            requestComputerMove(gameGeneration);
+        }
+    }
+
+    /**
+     * Отменить последний ход. Если последний ход сделал компьютер —
+     * отменяется ещё и ход игрока перед ним, чтобы игрок снова оказался
+     * на своём ходу и мог выбрать другой вариант.
+     */
+    public void undoLastMove() {
+        if (history.isEmpty() || waitingForComputer) {
+            return;
+        }
+
+        gameGeneration++; // "гасим" любой ответ сервера, который может прийти позже для старой позиции
+
+        GameSnapshot target = history.pop();
+        int undone = 1;
+        if (!history.isEmpty() && target.sideToMove() != humanColor) {
+            target = history.pop();
+            undone = 2;
+        }
+
+        for (int i = 0; i < undone && !appliedMoves.isEmpty(); i++) {
+            appliedMoves.remove(appliedMoves.size() - 1);
+        }
+
+        board.restoreFrom(target.board());
+        sideToMove = target.sideToMove();
+        gameOver = false;
+        waitingForComputer = false;
+
+        boardView.draw(board);
+        infoPanel.clearHistory();
+        for (AppliedMove move : appliedMoves) {
+            infoPanel.addMove(move.color(), move.notation());
+        }
+        infoPanel.setActiveClock(sideToMove);
+        infoPanel.resumeClocks();
+
+        applyStatus(CheckDetector.evaluate(board, sideToMove));
 
         if (!gameOver && sideToMove != humanColor) {
             requestComputerMove(gameGeneration);
@@ -139,6 +189,9 @@ public class GameController {
         waitingForComputer = false;
         this.humanColor = humanColor;
         this.difficultyLevel = Math.max(1, Math.min(10, difficultyLevel));
+
+        history.clear();
+        appliedMoves.clear();
 
         boardView.setFlipped(humanColor == PieceColor.BLACK);
         boardView.draw(board);
@@ -164,7 +217,7 @@ public class GameController {
         chessApiClient.requestBestMoveAsync(fen, difficulty)
                 .thenAccept(engineMove -> Platform.runLater(() -> {
                     if (requestGeneration != gameGeneration) {
-                        return; // партия уже перезапущена — этот ответ больше не актуален
+                        return; // партия уже перезапущена/ход отменён — этот ответ больше не актуален
                     }
                     waitingForComputer = false;
                     applyMove(engineMove.fromRow(), engineMove.fromCol(),

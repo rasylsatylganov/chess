@@ -26,6 +26,7 @@ import kg.nurtelecom.chess.models.Board;
 import kg.nurtelecom.chess.models.PieceColor;
 import kg.nurtelecom.chess.ui.BoardView;
 import kg.nurtelecom.chess.ui.InfoPanel;
+import kg.nurtelecom.chess.ui.WelcomePanel;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -70,24 +71,25 @@ public class ChessApplication extends Application {
 		boardView.heightProperty().bind(boardSize);
 		boardSize.addListener((obs, oldVal, newVal) -> boardView.draw(board));
 
+		WelcomePanel welcomePanel = new WelcomePanel();
+
 		BorderPane root = new BorderPane();
-		root.setTop(buildMenuBar(gameController));
-		root.setCenter(boardContainer);
+		root.setCenter(welcomePanel); // доска появится только после выбора "Игра -> Одиночная"
 		root.setRight(infoPanel);
+		root.setTop(buildMenuBar(gameController, root, boardContainer));
 
 		Scene scene = new Scene(root, 900, 700);
 
 		primaryStage.setTitle("Шахматы");
 		primaryStage.setScene(scene);
 		primaryStage.setResizable(true);
+		primaryStage.setMaximized(true); // сразу на весь экран
 		primaryStage.show();
-
-		boardView.draw(board); // первая отрисовка, когда размеры уже посчитаны
 	}
 
-	private MenuBar buildMenuBar(GameController gameController) {
+	private MenuBar buildMenuBar(GameController gameController, BorderPane root, StackPane boardContainer) {
 		MenuItem vsComputerWeb = new MenuItem("С компьютером (Web)");
-		vsComputerWeb.setOnAction(event -> promptNewGameSettings(gameController));
+		vsComputerWeb.setOnAction(event -> promptNewGameSettings(gameController, root, boardContainer));
 
 		Menu singlePlayerMenu = new Menu("Одиночная");
 		singlePlayerMenu.getItems().add(vsComputerWeb);
@@ -95,17 +97,22 @@ public class ChessApplication extends Application {
 		Menu gameMenu = new Menu("Игра");
 		gameMenu.getItems().add(singlePlayerMenu);
 
+		MenuItem undoMove = new MenuItem("Сделать ход назад");
+		undoMove.setOnAction(event -> gameController.undoLastMove());
+
+		Menu movesMenu = new Menu("Ходы");
+		movesMenu.getItems().add(undoMove);
+
 		MenuBar menuBar = new MenuBar();
-		menuBar.getMenus().add(gameMenu);
+		menuBar.getMenus().addAll(gameMenu, movesMenu);
 		return menuBar;
 	}
 
 	/**
 	 * Диалог "Новая игра": выбор цвета фигур + ползунок сложности компьютера (1-10).
-	 * Уровень сложности переводится в параметры depth/maxThinkingTime запроса
-	 * к chess-api.com — см. {@link kg.nurtelecom.chess.api.EngineDifficulty}.
+	 * После подтверждения доска (boardContainer) заменяет собой стартовую заставку в центре окна.
 	 */
-	private void promptNewGameSettings(GameController gameController) {
+	private void promptNewGameSettings(GameController gameController, BorderPane root, StackPane boardContainer) {
 		Dialog<NewGameSettings> dialog = new Dialog<>();
 		dialog.setTitle("Новая игра");
 		dialog.setHeaderText("Настройки партии");
@@ -154,7 +161,10 @@ public class ChessApplication extends Application {
 		});
 
 		Optional<NewGameSettings> result = dialog.showAndWait();
-		result.ifPresent(settings -> gameController.startNewGame(settings.humanColor(), settings.difficultyLevel()));
+		result.ifPresent(settings -> {
+			root.setCenter(boardContainer); // заставка -> доска
+			gameController.startNewGame(settings.humanColor(), settings.difficultyLevel());
+		});
 	}
 
 	@Override
