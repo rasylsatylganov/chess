@@ -3,6 +3,7 @@ package kg.nurtelecom.chess.game;
 import javafx.scene.input.MouseEvent;
 import kg.nurtelecom.chess.models.Board;
 import kg.nurtelecom.chess.models.PieceColor;
+import kg.nurtelecom.chess.notation.MoveNotation;
 import kg.nurtelecom.chess.records.Piece;
 import kg.nurtelecom.chess.rules.CheckDetector;
 import kg.nurtelecom.chess.rules.MoveValidator;
@@ -11,7 +12,8 @@ import kg.nurtelecom.chess.ui.InfoPanel;
 
 /**
  * Соединяет модель (Board), отрисовку (BoardView), правила (MoveValidator,
- * CheckDetector) и мышь пользователя. Хранит, чей сейчас ход, и завершена ли партия.
+ * CheckDetector), нотацию хода (MoveNotation) и мышь пользователя.
+ * Хранит, чей сейчас ход, и завершена ли партия.
  */
 public class GameController {
 
@@ -78,14 +80,23 @@ public class GameController {
         dragFromRow = -1;
         dragFromCol = -1;
         boardView.draw(board);
-        updateStatus();
     }
 
     private void applyMove(int fromRow, int fromCol, int toRow, int toCol) {
         Piece piece = board.get(fromRow, fromCol);
+        Piece captured = board.get(toRow, toCol);
+        PieceColor movedColor = piece.color();
+
         board.set(toRow, toCol, piece);
         board.set(fromRow, fromCol, null);
         sideToMove = sideToMove.opposite();
+
+        CheckDetector.Status status = CheckDetector.evaluate(board, sideToMove);
+
+        String moveText = MoveNotation.format(piece, fromRow, fromCol, toRow, toCol, captured != null, status);
+        infoPanel.addMove(movedColor, moveText);
+
+        applyStatus(status);
     }
 
     /** Начать новую партию: сбросить позицию, выбрать сторону игрока, обновить отображение. */
@@ -95,13 +106,13 @@ public class GameController {
         gameOver = false;
         boardView.setFlipped(humanColor == PieceColor.BLACK);
         boardView.draw(board);
+        infoPanel.clearHistory();
 
         String colorLabel = humanColor == PieceColor.WHITE ? "белыми" : "чёрными";
         infoPanel.setStatus("Вы играете " + colorLabel + ".\nХод белых.");
     }
 
-    private void updateStatus() {
-        CheckDetector.Status status = CheckDetector.evaluate(board, sideToMove);
+    private void applyStatus(CheckDetector.Status status) {
         String turnLabel = sideToMove == PieceColor.WHITE ? "белых" : "чёрных";
 
         switch (status) {
