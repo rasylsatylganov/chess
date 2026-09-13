@@ -44,6 +44,13 @@
 			<version>${javafx.version}</version>
 		</dependency>
 
+		<!-- Для разбора JSON-ответа от chess-api.com. Версию НЕ указываем —
+		     её подберёт сам spring-boot-starter-parent (гарантированная совместимость). -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>

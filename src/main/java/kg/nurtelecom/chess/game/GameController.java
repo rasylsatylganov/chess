@@ -1,6 +1,11 @@
 package kg.nurtelecom.chess.game;
 
+import javafx.application.Platform;
 import javafx.scene.input.MouseEvent;
+import kg.nurtelecom.chess.api.ChessApiClient;
+import kg.nurtelecom.chess.api.EngineMove;
+import kg.nurtelecom.chess.enums.PieceType;
+import kg.nurtelecom.chess.fen.FenConverter;
 import kg.nurtelecom.chess.models.Board;
 import kg.nurtelecom.chess.models.PieceColor;
 import kg.nurtelecom.chess.notation.MoveNotation;
@@ -12,17 +17,29 @@ import kg.nurtelecom.chess.ui.InfoPanel;
 
 /**
  * Соединяет модель (Board), отрисовку (BoardView), правила (MoveValidator,
- * CheckDetector), нотацию хода (MoveNotation) и мышь пользователя.
- * Хранит, чей сейчас ход, и завершена ли партия.
+ * CheckDetector), нотацию хода, часы, мышь пользователя — и теперь ещё
+ * и "думающего" соперника через {@link ChessApiClient}.
+ * <p>
+ * Игрок двигает только фигуры выбранного им цвета (humanColor). После
+ * каждого хода, если очередь оказывается за другим цветом, GameController
+ * сам запрашивает ход у chess-api.com и применяет его — асинхронно,
+ * чтобы окно не "зависало" в ожидании ответа сервера.
  */
 public class GameController {
 
     private final Board board;
     private final BoardView boardView;
     private final InfoPanel infoPanel;
+    private final ChessApiClient chessApiClient = new ChessApiClient();
 
     private PieceColor sideToMove = PieceColor.WHITE;
+    private PieceColor humanColor = PieceColor.WHITE;
     private boolean gameOver = false;
+    private boolean waitingForComputer = false;
+
+    // Растёт с каждой новой партией — так пришедший с опозданием ответ от
+    // сервера от УЖЕ ЗАКОНЧЕННОЙ/ПЕРЕЗАПУЩЕННОЙ партии просто игнорируется.
+    private int gameGeneration = 0;
 
     private boolean dragging = false;
     private int dragFromRow = -1;
@@ -41,7 +58,7 @@ public class GameController {
     }
 
     private void handleMousePressed(MouseEvent event) {
-        if (gameOver) {
+        if (gameOver || waitingForComputer) {
             return;
         }
 
@@ -53,8 +70,9 @@ public class GameController {
         int col = square[1];
 
         Piece piece = board.get(row, col);
-        if (piece == null || piece.color() != sideToMove) {
-            return; // пустая клетка или чужая фигура — выбирать нечего
+        // Двигать можно только СВОИ фигуры (humanColor) и только в свой ход.
+        if (piece == null || piece.color() != humanColor || sideToMove != humanColor) {
+            return;
         }
 
         dragging = true;
@@ -73,7 +91,7 @@ public class GameController {
             int toRow = square[0];
             int toCol = square[1];
             if (MoveValidator.isLegalMove(board, dragFromRow, dragFromCol, toRow, toCol)) {
-                applyMove(dragFromRow, dragFromCol, toRow, toCol);
+                applyMove(dragFromRow, dragFromCol, toRow, toCol, null);
             }
         }
 
@@ -82,29 +100,43 @@ public class GameController {
         boardView.draw(board);
     }
 
-    private void applyMove(int fromRow, int fromCol, int toRow, int toCol) {
+    /**
+     * Переставляет фигуру, обновляет часы/историю/статус и, если теперь
+     * очередь соперника — запрашивает его ход у chess-api.com.
+     * promotion — во что превратить пешку (только для ходов от chess-api.com;
+     * свои собственные превращения пешки мы пока не поддерживаем, см. MoveValidator).
+     */
+    private void applyMove(int fromRow, int fromCol, int toRow, int toCol, PieceType promotion) {
         Piece piece = board.get(fromRow, fromCol);
         Piece captured = board.get(toRow, toCol);
-        PieceColor movedColor = piece.color();
+        Piece placedPiece = promotion != null ? new Piece(promotion, piece.color()) : piece;
 
-        board.set(toRow, toCol, piece);
+        board.set(toRow, toCol, placedPiece);
         board.set(fromRow, fromCol, null);
         sideToMove = sideToMove.opposite();
 
         CheckDetector.Status status = CheckDetector.evaluate(board, sideToMove);
 
-        String moveText = MoveNotation.format(piece, fromRow, fromCol, toRow, toCol, captured != null, status);
-        infoPanel.addMove(movedColor, moveText);
+        String moveText = MoveNotation.format(placedPiece, fromRow, fromCol, toRow, toCol, captured != null, status);
+        infoPanel.addMove(piece.color(), moveText);
         infoPanel.setActiveClock(sideToMove);
 
         applyStatus(status);
+
+        if (!gameOver && sideToMove != humanColor) {
+            requestComputerMove(gameGeneration);
+        }
     }
 
     /** Начать новую партию: сбросить позицию, выбрать сторону игрока, обновить отображение. */
     public void startNewGame(PieceColor humanColor) {
+        gameGeneration++;
         board.setupStandardPosition();
         sideToMove = PieceColor.WHITE;
         gameOver = false;
+        waitingForComputer = false;
+        this.humanColor = humanColor;
+
         boardView.setFlipped(humanColor == PieceColor.BLACK);
         boardView.draw(board);
         infoPanel.clearHistory();
@@ -112,6 +144,43 @@ public class GameController {
 
         String colorLabel = humanColor == PieceColor.WHITE ? "белыми" : "чёрными";
         infoPanel.setStatus("Вы играете " + colorLabel + ".\nХод белых.");
+
+        if (sideToMove != humanColor) {
+            requestComputerMove(gameGeneration);
+        }
+    }
+
+    private void requestComputerMove(int requestGeneration) {
+        waitingForComputer = true;
+        infoPanel.setStatus("Компьютер думает...");
+
+        String fen = FenConverter.toFen(board, sideToMove);
+
+        chessApiClient.requestBestMoveAsync(fen)
+                .thenAccept(engineMove -> Platform.runLater(() -> {
+                    if (requestGeneration != gameGeneration) {
+                        return; // партия уже перезапущена — этот ответ больше не актуален
+                    }
+                    waitingForComputer = false;
+                    applyMove(engineMove.fromRow(), engineMove.fromCol(),
+                            engineMove.toRow(), engineMove.toCol(), engineMove.promotionType());
+                    boardView.draw(board);
+                }))
+                .exceptionally(error -> {
+                    Platform.runLater(() -> {
+                        if (requestGeneration != gameGeneration) {
+                            return;
+                        }
+                        waitingForComputer = false;
+                        infoPanel.setStatus("Не удалось получить ход от сервера:\n" + rootMessage(error));
+                    });
+                    return null;
+                });
+    }
+
+    private String rootMessage(Throwable error) {
+        Throwable cause = error.getCause() != null ? error.getCause() : error;
+        return cause.getMessage() != null ? cause.getMessage() : cause.toString();
     }
 
     private void applyStatus(CheckDetector.Status status) {
