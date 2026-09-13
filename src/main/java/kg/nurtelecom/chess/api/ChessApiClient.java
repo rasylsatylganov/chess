@@ -10,6 +10,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -30,10 +31,14 @@ public class ChessApiClient {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public CompletableFuture<EngineMove> requestBestMoveAsync(String fen) {
+    public CompletableFuture<EngineMove> requestBestMoveAsync(String fen, EngineDifficulty difficulty) {
         String requestBody;
         try {
-            requestBody = objectMapper.writeValueAsString(Map.of("fen", fen));
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("fen", fen);
+            payload.put("depth", difficulty.depth());
+            payload.put("maxThinkingTime", difficulty.maxThinkingTimeMs());
+            requestBody = objectMapper.writeValueAsString(payload);
         } catch (IOException e) {
             return CompletableFuture.failedFuture(e);
         }

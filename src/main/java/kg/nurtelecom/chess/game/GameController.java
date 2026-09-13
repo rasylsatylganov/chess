@@ -3,6 +3,7 @@ package kg.nurtelecom.chess.game;
 import javafx.application.Platform;
 import javafx.scene.input.MouseEvent;
 import kg.nurtelecom.chess.api.ChessApiClient;
+import kg.nurtelecom.chess.api.EngineDifficulty;
 import kg.nurtelecom.chess.api.EngineMove;
 import kg.nurtelecom.chess.enums.PieceType;
 import kg.nurtelecom.chess.fen.FenConverter;
@@ -34,6 +35,7 @@ public class GameController {
 
     private PieceColor sideToMove = PieceColor.WHITE;
     private PieceColor humanColor = PieceColor.WHITE;
+    private int difficultyLevel = 5;
     private boolean gameOver = false;
     private boolean waitingForComputer = false;
 
@@ -128,14 +130,15 @@ public class GameController {
         }
     }
 
-    /** Начать новую партию: сбросить позицию, выбрать сторону игрока, обновить отображение. */
-    public void startNewGame(PieceColor humanColor) {
+    /** Начать новую партию: сбросить позицию, выбрать сторону игрока и сложность компьютера. */
+    public void startNewGame(PieceColor humanColor, int difficultyLevel) {
         gameGeneration++;
         board.setupStandardPosition();
         sideToMove = PieceColor.WHITE;
         gameOver = false;
         waitingForComputer = false;
         this.humanColor = humanColor;
+        this.difficultyLevel = Math.max(1, Math.min(10, difficultyLevel));
 
         boardView.setFlipped(humanColor == PieceColor.BLACK);
         boardView.draw(board);
@@ -143,7 +146,8 @@ public class GameController {
         infoPanel.resetClocks();
 
         String colorLabel = humanColor == PieceColor.WHITE ? "белыми" : "чёрными";
-        infoPanel.setStatus("Вы играете " + colorLabel + ".\nХод белых.");
+        infoPanel.setStatus("Вы играете " + colorLabel + ".\nСложность: " + this.difficultyLevel
+                + "/10.\nХод белых.");
 
         if (sideToMove != humanColor) {
             requestComputerMove(gameGeneration);
@@ -155,8 +159,9 @@ public class GameController {
         infoPanel.setStatus("Компьютер думает...");
 
         String fen = FenConverter.toFen(board, sideToMove);
+        EngineDifficulty difficulty = EngineDifficulty.forLevel(difficultyLevel);
 
-        chessApiClient.requestBestMoveAsync(fen)
+        chessApiClient.requestBestMoveAsync(fen, difficulty)
                 .thenAccept(engineMove -> Platform.runLater(() -> {
                     if (requestGeneration != gameGeneration) {
                         return; // партия уже перезапущена — этот ответ больше не актуален
