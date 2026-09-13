@@ -13,14 +13,14 @@ package kg.nurtelecom.chess.api;
 public record EngineDifficulty(int depth, int maxThinkingTimeMs) {
 
     private static final EngineDifficulty[] LEVELS = {
-            new EngineDifficulty(4, 10),   // 1 — совсем слабо и быстро
-            new EngineDifficulty(6, 15),   // 2
-            new EngineDifficulty(7, 20),   // 3
-            new EngineDifficulty(8, 25),   // 4
-            new EngineDifficulty(9, 30),   // 5 — средний уровень
-            new EngineDifficulty(10, 40),  // 6
+            new EngineDifficulty(1, 10),   // 1 — совсем слабо и быстро
+            new EngineDifficulty(2, 15),   // 2
+            new EngineDifficulty(3, 20),   // 3
+            new EngineDifficulty(5, 25),   // 4
+            new EngineDifficulty(7, 30),   // 5 — средний уровень
+            new EngineDifficulty(9, 40),  // 6
             new EngineDifficulty(11, 50),  // 7
-            new EngineDifficulty(12, 60),  // 8
+            new EngineDifficulty(13, 60),  // 8
             new EngineDifficulty(15, 80),  // 9
             new EngineDifficulty(18, 100), // 10 — максимум бесплатного тарифа
     };
