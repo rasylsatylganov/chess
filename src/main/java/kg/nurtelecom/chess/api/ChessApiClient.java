@@ -43,6 +43,8 @@ public class ChessApiClient {
             return CompletableFuture.failedFuture(e);
         }
 
+        System.out.println("[chess-api.com] запрос: " + requestBody);
+
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL))
                 .timeout(Duration.ofSeconds(20))
@@ -58,6 +60,9 @@ public class ChessApiClient {
         if (response.statusCode() != 200) {
             throw new RuntimeException("chess-api.com вернул код " + response.statusCode() + ": " + response.body());
         }
+
+        System.out.println("[chess-api.com] ответ: " + response.body());
+
         try {
             JsonNode json = objectMapper.readTree(response.body());
             String from = json.path("from").asText(null);
@@ -66,9 +71,13 @@ public class ChessApiClient {
                 throw new IOException("В ответе нет полей from/to: " + response.body());
             }
             String promotion = json.hasNonNull("promotion") ? json.path("promotion").asText() : null;
-            return new EngineMove(from, to, promotion);
+            int depth = json.path("depth").asInt(-1);
+            Double eval = json.hasNonNull("eval") ? json.path("eval").asDouble() : null;
+            String text = json.path("text").asText(null);
+            return new EngineMove(from, to, promotion, depth, eval, text);
         } catch (IOException e) {
             throw new RuntimeException("Не удалось разобрать ответ chess-api.com", e);
         }
     }
 }
+ 

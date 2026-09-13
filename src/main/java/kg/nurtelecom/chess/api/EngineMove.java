@@ -6,8 +6,13 @@ import kg.nurtelecom.chess.enums.PieceType;
  * Ход, который прислал chess-api.com. from/to — в его собственном формате
  * ("b7", "e4"), методы ниже переводят их в систему координат нашей Board
  * (row 0 = восьмая горизонталь).
+ * <p>
+ * depth/eval/text — фактические данные из ответа сервера. Полезны, чтобы
+ * ПРОВЕРИТЬ, что уровень сложности реально дошёл до сервера: depth здесь
+ * должен совпадать (или быть очень близким) с тем, что мы запросили в
+ * EngineDifficulty — если да, значит параметр точно учитывается.
  */
-public record EngineMove(String from, String to, String promotion) {
+public record EngineMove(String from, String to, String promotion, int depth, Double eval, String text) {
 
     public int fromRow() {
         return 8 - Character.getNumericValue(from.charAt(1));

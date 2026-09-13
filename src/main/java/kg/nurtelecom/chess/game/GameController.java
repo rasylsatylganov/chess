@@ -170,6 +170,11 @@ public class GameController {
                     applyMove(engineMove.fromRow(), engineMove.fromCol(),
                             engineMove.toRow(), engineMove.toCol(), engineMove.promotionType());
                     boardView.draw(board);
+
+                    if (!gameOver) {
+                        String evalText = engineMove.eval() != null ? String.format("%.2f", engineMove.eval()) : "?";
+                        infoPanel.appendStatusLine("Сервер: глубина " + engineMove.depth() + ", оценка " + evalText);
+                    }
                 }))
                 .exceptionally(error -> {
                     Platform.runLater(() -> {

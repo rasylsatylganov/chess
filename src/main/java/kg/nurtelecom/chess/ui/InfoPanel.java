@@ -47,6 +47,11 @@ public class InfoPanel extends VBox {
         statusLabel.setText(text);
     }
 
+    /** Добавить строку к уже показанному статусу, не стирая его (например, техническую подробность от сервера). */
+    public void appendStatusLine(String extraLine) {
+        statusLabel.setText(statusLabel.getText() + "\n" + extraLine);
+    }
+
     /** Очистить историю и начать нумерацию ходов заново (вызывается при новой партии). */
     public void clearHistory() {
         historyArea.clear();
